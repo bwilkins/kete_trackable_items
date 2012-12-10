@@ -16,7 +16,7 @@ class TrackableItemShelfLocationsController < ApplicationController
 
     @trackable_item_shelf_location = @trackable_item.present? ? @trackable_item.trackable_item_shelf_locations.build : TrackableItemShelfLocation.new
   end
-  
+
   def create
     repository_id = params[:trackable_item_shelf_location].delete(:repository_id)
     code = params[:trackable_item_shelf_location].delete(:code)
@@ -79,7 +79,7 @@ class TrackableItemShelfLocationsController < ApplicationController
     else
       @successful = @trackable_item_shelf_location.update_attributes(params[:shelf_location])
     end
-    
+
     if @successful || @state_change_failed
       flash[:notice] = t('shelf_locations.update.state_change_failed', :event_transition => params[:event].humanize) if @state_change_failed
 
@@ -89,5 +89,25 @@ class TrackableItemShelfLocationsController < ApplicationController
     else
       render :action => 'edit'
     end
+  end
+
+  def bulk_export
+    @basket_options = Basket.find(:all, :conditions=> ['id in (SELECT t.basket_id FROM topics t WHERE extended_content LIKE ?)', '%legacy_identifier%'])
+    render
+  end
+
+  def bulk_import
+    file = File.new("#{Rails.root.to_s}/tmp/import-#{Time.now.strftime '%Y%m%d-%H%M'}.xlsx", "w")
+    file.write(params[:import].read)
+    file.close
+    BulkAllocation::import(file.path)
+    redirect_to :action => 'bulk_export'
+  end
+
+  def generate_export
+    basket = Basket.find(params[:basket_id] )
+    file = BulkAllocation::export(basket)
+    headers["Content-Disposition"] = "attachment; filename=#{File.basename file.path}"
+    send_data file.read, :filename => File.basename(file.path)
   end
 end
